@@ -80,6 +80,7 @@ static void draw(struct player *player,
 	glPopMatrix();
 
 	for(i = 0; i < nenemies; ++i) {
+		if(enemies[i].health <= 0) continue;		 
 		/*print_enemy(&(enemies[i]));*/
 		glPushMatrix();
 		glTranslatef(enemies[i].x, enemies[i].y, 0.0);
@@ -97,17 +98,6 @@ static void draw(struct player *player,
 
   SDL_GL_SwapBuffers();
 
-  /* Frames++; */
-  /* { */
-  /*    GLint t = SDL_GetTicks(); */
-  /*    if (t - T0 >= 5000) { */
-  /*       GLfloat seconds = (t - T0) / 1000.0; */
-  /*       GLfloat fps = Frames / seconds; */
-  /*       printf("%d frames in %g seconds = %g FPS\n", Frames, seconds, fps); */
-  /*       T0 = t; */
-  /*       Frames = 0; */
-  /*    } */
-  /* } */
 }
 
 /* new window size or exposure */
@@ -150,14 +140,37 @@ static void init(struct player *player,
 	*/
 }
 
+
+static float game_speed = 1.0;
+float get_game_speed()
+{
+	return game_speed;
+}
+
+void calc_game_speed()
+{
+	static int frames = 0;
+	static GLint start_time = 0;
+ 
+	frames++;
+	
+	GLint t = SDL_GetTicks();
+	if (t - start_time >= 1000) {
+		GLfloat seconds = (t - start_time) / 1000.0;
+		GLfloat fps = frames / seconds;
+		printf("%d frames in %g seconds = %g FPS\n", frames, seconds, fps);
+		start_time = t;
+		frames = 0;
+		game_speed = 60.0 / fps;
+	}
+}
+
 void run(struct player *player, 
 				 struct enemy *enemies, int nenemies)
 {
   SDL_Surface *screen;
   int done;
   Uint8 *keys;
-	Uint8 mouse;
-	int mx, my;
 
   SDL_Init(SDL_INIT_VIDEO);
 
@@ -167,7 +180,7 @@ void run(struct player *player,
     SDL_Quit();
     exit(2);
   }
-  SDL_WM_SetCaption("Gears", "gears");
+  SDL_WM_SetCaption("Title", "title");
 
   init(player, enemies, nenemies);
   reshape(screen->w, screen->h);
@@ -201,10 +214,13 @@ void run(struct player *player,
 			case SDL_MOUSEBUTTONDOWN:
 				printf("Mouse button %d pressed at (%d,%d)\n",
 							 event.button.button, event.button.x, event.button.y);
-				player->destx = (- screen->w/2 + mx) / 40.0;
-				player->desty = (screen->h/2 - my) / 40.0;
+				player->destx = (- screen->w/2 + event.button.x) / 40.0;
+				player->desty = (screen->h/2 - event.button.y) / 40.0;
+				
 				player->target = get_enemy_at(player->destx, player->desty,
 																			enemies, nenemies);
+				print_player(player);
+				
 				break;
 			default:
 				break;
@@ -217,13 +233,10 @@ void run(struct player *player,
 			done = 1;
 		}
 
-		mouse = SDL_GetMouseState(&mx, &my);
-		/*
-			player->x = (- screen->w/2 + mx) / 40.0;
-			player->y = (screen->h/2 - my) / 40.0;
-		*/
+		calc_game_speed();
 		
 		update_player(player);
+		update_enemies(enemies, nenemies);
 		apply_exclusion(player, enemies, nenemies);
 
 		draw(player, enemies, nenemies);
@@ -235,19 +248,16 @@ void run(struct player *player,
 void test()
 {
 	struct player player;
-	int nenemies = 20, i;
+	int nenemies = 200, i;
 	struct enemy enemies[nenemies];
 
 	memset(enemies, 0, nenemies * sizeof(struct enemy));
 	memset(&player, 0, sizeof(struct player));
 
-	player.size = 0.5;
-	
+	init_player(&player);
 	for(i = 0; i < nenemies; ++i) {
-		enemies[i].x = 5.0 - 10.0 * (float)rand() / (float) RAND_MAX;
-		enemies[i].y = 5.0 - 10.0 * (float)rand() / (float) RAND_MAX;
-		enemies[i].size = 0.25;
-		/*print_enemy(&(enemies[i]));*/
+		init_enemy(&enemies[i]);
+		print_enemy(&enemies[i]);
 	}
 	run(&player, enemies, nenemies);
 }

@@ -39,6 +39,29 @@ struct enemy *get_enemy_at(float x, float y,
 	return NULL;
 }
 
+void init_player(struct player *player)
+{
+	player->size = 0.5;
+	player->destx = player->desty = 0.0;
+	player->health = 20;
+	player->close_attack_range = 0.00001;
+	player->attack_duration = 333; /* 1/3 secs */
+}
+
+void init_enemy(struct enemy *enemy)
+{
+	enemy->x = 5.0 - 10.0 * (float)rand() / (float) RAND_MAX;
+	enemy->y = 5.0 - 10.0 * (float)rand() / (float) RAND_MAX;
+	enemy->size = 0.125 + 0.125 * (float)rand() / (float) RAND_MAX;
+	enemy->health = 2;
+}
+
+void player_attack(struct player *player)
+{
+	player->target->health -= 1;
+	print_enemy(player->target);
+}
+
 void update_player(struct player *player)
 {
 	float dx, dy, n;
@@ -62,9 +85,24 @@ void update_player(struct player *player)
 	else 
 		dx = dy = 0.0;
 
+	if(player->target && player->target->health > 0)
+		printf("Target Range: %f\n", n);
+
+	if(player->target && 
+		 player->target->health > 0 &&
+		 n <= player->close_attack_range + player->size + player->target->size) {
+		if(!player->attack_started)
+			player->attack_started = SDL_GetTicks();
+		else if(SDL_GetTicks() > player->attack_started + player->attack_duration) {
+			player_attack(player);
+			player->attack_started = 0;
+			player->target = NULL;
+		}
+	}
+	
 	player->vx = dx * PLAYER_SPEED;
 	player->vy = dy * PLAYER_SPEED;
-	print_player(player);
+	/*print_player(player);*/
 }
 
 void update_enemies(struct enemy *enemies, int nenemies)
@@ -76,6 +114,10 @@ void update_enemies(struct enemy *enemies, int nenemies)
 
 void update_enemy(struct enemy *enemy)
 {
+	if(enemy->health <= 0) {
+		return;
+	}
+
 	enemy->x += enemy->vx;
 	enemy->y += enemy->vy;
 }
@@ -121,30 +163,43 @@ void apply_exclusion(struct player *player,
 	float d, dx, dy, min_dist, nx, ny;
 	float px, py, ex, ey;
 	for(i = 0; i < nenemies; ++i) {
+		if(enemies[i].health <= 0) continue;
 		diff(player->x, player->y,
 				 enemies[i].x, enemies[i].y,
 				 &dx, &dy);
 		mag(dx, dy, &d);
 		min_dist = player->size + enemies[i].size;
 		norm(dx, dy, &nx, &ny);
-		if(d < min_dist) {
-			px = enemies[i].x - min_dist * nx;
-			py = enemies[i].y - min_dist * ny;
-			ex = player->x + min_dist * nx;
-			ey = player->y + min_dist * ny;
-			
+		if(d < min_dist / 2) {
+			px = enemies[i].x - min_dist * nx / 2;
+			py = enemies[i].y - min_dist * ny / 2;
+
 			player->x = px;
 			player->y = py;
-			/*enemies[i].x = ex;
-				enemies[i].y = ey;*/
 		}
 	}
 
-	/*
-	for(i = 0; i < nenemies; ++i) {
-		for(j = i; j < nenemies; ++j) {
-			
+	for(i = 0; i < nenemies - 1; ++i) {
+		if(enemies[i].health <= 0) continue;
+		for(j = i + 1; j < nenemies; ++j) {
+		if(enemies[j].health <= 0) continue;
+			diff(enemies[i].x, enemies[i].y,
+					 enemies[j].x, enemies[j].y,
+				 &dx, &dy);
+			mag(dx, dy, &d);
+			min_dist = enemies[i].size + enemies[j].size;
+			norm(dx, dy, &nx, &ny);
+			if(d < min_dist) {
+				px = enemies[j].x - min_dist * nx;
+				py = enemies[j].y - min_dist * ny;
+				ex = enemies[i].x + min_dist * nx;
+				ey = enemies[i].y + min_dist * ny;
+				
+				enemies[i].x = px;
+				enemies[i].y = py;
+				enemies[j].x = ex;
+				enemies[j].y = ey;
+			}	
 		}
 	}
-	*/
 }
