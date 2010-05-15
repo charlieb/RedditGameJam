@@ -19,22 +19,27 @@ static GLfloat red[4]   = {0.8, 0.1, 0.0, 1.0};
 static GLfloat green[4] = {0.0, 0.8, 0.2, 1.0};
 static GLfloat blue[4]  = {0.2, 0.2, 1.0, 1.0};
 static GLfloat grey[4]  = {0.7, 0.7, 0.7, 1.0};
+static GLfloat black[4] = {0.7, 0.7, 0.7, 1.0};
+
 
 static void circle(int segments, float radius)
 {
 	GLfloat angle;
+	int i, j;
 
   glShadeModel(GL_FLAT);
 	
   glNormal3f(0.0, 0.0, 1.0);
 
   /* draw front face */
-  glBegin(GL_LINE_LOOP);
-  for (int i = 0; i <= segments; i++) {
-    angle = i * 2.0 * M_PI / segments;
-    glVertex2f(radius * cos(angle), radius * sin(angle));
-  }
-  glEnd();
+	for(j = 0; j < 3; ++j) {  
+		glBegin(GL_LINE_LOOP);
+		for(i = 0; i <= segments; i++) {
+			angle = i * 2.0 * M_PI / segments;
+			glVertex3f(radius * cos(angle), radius * sin(angle), j * 0.01);
+		}
+		glEnd();
+	}
 	
 }
 
@@ -70,7 +75,7 @@ static void draw_player(struct player *player)
 {
 	/*print_player(player);*/
 	glPushMatrix();
-	glTranslatef(player->x, player->y, 0.0);
+	glTranslatef(player->x, player->y, 0.01);
   glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
 	/* glRotatef(angle, 0.0, 0.0, 1.0); */
 	glCallList(player->lines);
@@ -81,7 +86,7 @@ static void draw_enemy(struct enemy *enemy)
 {
 	/*print_enemy(&(enemies[i]));*/
 	glPushMatrix();
-	glTranslatef(enemy->x, enemy->y, 0.0);
+	glTranslatef(enemy->x, enemy->y, 0.01);
 	/* glRotatef(angle, 0.0, 0.0, 1.0); */
 	if(enemy->under_attack)
 		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
@@ -95,9 +100,8 @@ static void draw_attacker(struct attacker *attacker)
 {
 	/*print_enemy(&(enemies[i]));*/
 	glPushMatrix();
-	glTranslatef(attacker->x, attacker->y, 0.0);
+	glTranslatef(attacker->x, attacker->y, 0.01);
 	glScalef(0.1, 0.1, 0.0);
-	/* glRotatef(angle, 0.0, 0.0, 1.0); */
 	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
 	glCallList(attacker->lines);
 	glPopMatrix();
@@ -110,16 +114,22 @@ static void draw(struct player *player,
 	int i;
 	
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	/*
-		glPushMatrix();
-		glRotatef(view_rotx, 1.0, 0.0, 0.0);
-		glRotatef(view_roty, 0.0, 1.0, 0.0);
-		glRotatef(view_rotz, 0.0, 0.0, 1.0);
-	*/
 
-  /* glPushMatrix();
-		 glTranslatef(-3.0, -2.0, 0.0);
-	*/
+	/* draw the ground plane */
+	glPushMatrix();
+	glTranslatef(0.0, 0.0, 0.0);
+  glShadeModel(GL_FLAT);
+	glNormal3f(0.0, 0.0, -1.0);
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
+  glBegin(GL_QUADS);
+	{
+		glVertex2f(-1000.0, 1000.0);
+		glVertex2f(-1000.0, -1000.0);
+		glVertex2f(1000.0, -1000.0);
+		glVertex2f(1000.0, 1000.0);
+	}
+  glEnd();
+	glPopMatrix();	
 
 	draw_player(player);
 
@@ -133,13 +143,6 @@ static void draw(struct player *player,
 		draw_attacker(&attackers[i]);
 	}
 
-	/*
-	glPopMatrix();
-	*/
-	/*
-		glPopMatrix();
-	*/
-
   SDL_GL_SwapBuffers();
 
 }
@@ -152,14 +155,17 @@ static void reshape(int width, int height)
   glViewport(0, 0, (GLint) width, (GLint) height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(-1.0, 1.0, -h, h, 5.0, 60.0); 
-	/* glFrustum(-1.0, 1.0, -h, h, 5.0, 60.0); */
+	glOrtho(-1.0, 1.0, -h, h, -60.0, 60.0);
+	/*glFrustum(-1.0, 1.0, -h, h, 5.0, 60.0); */
 	
 	/* glFrustum(-h, h, -h, h, 5.0, 60.0); */
 	/* glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 60.0); */
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
-  glTranslatef(0.0, 0.0, -40.0);
+	/*glTranslatef(0.0, -35.0, -40.0);*/
+	glRotatef(35.264f, 1.0f, 0.0f, 0.0f);
+	/*glRotatef(-45.0f, 0.0f, 1.0f, 0.0f);*/
+
 }
 
 static void init(struct player *player, 
@@ -226,7 +232,7 @@ void get_gl_pos(int x, int y, double *glx, double *gly, double *glz)
 
 	winx = (float)x;
 	winy = (float)viewport[3] - (float)y;
-	glReadPixels(x, winz, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winz );
+	glReadPixels(x, winy, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winz);
 
 	gluUnProject(winx, winy, winz,
 							 modelview, projection, viewport,
