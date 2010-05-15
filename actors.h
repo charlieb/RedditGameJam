@@ -11,8 +11,9 @@
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 
 float get_game_speed();
-#define PLAYER_SPEED (0.000125 / get_game_speed())
-#define ATTACKER_SPEED (0.00125 / get_game_speed())
+#define PLAYER_SPEED (0.00125 / get_game_speed())
+#define ATTACKER_SPEED (0.0125 / get_game_speed())
+#define ENEMY_SPEED (0.00025 / get_game_speed())
 #define MIN_DIST 0.000001
 #define TRUE 1
 #define FALSE 0
@@ -35,6 +36,15 @@ struct enemy {
 	float size;
 	int health;
 
+	float turn_rate;
+
+	float attra;
+	float align;
+	float chase;
+
+	float attract_dist;
+	float align_dist;
+
 	int under_attack;
 	struct attacker *far_hit_by;
 	Uint32 far_hit_started;
@@ -43,7 +53,7 @@ struct enemy {
 };
 
 struct player {
-	float x, y, vx, vy;
+	float x, y, vx, vy, dx, dy;
 	float destx, desty;	
 	float size;
 	int health;
@@ -61,6 +71,8 @@ struct player {
 	struct enemy *target;
 	Uint32 attack_started;
 	
+	unsigned int score;
+
 	GLint lines;
 };
 
@@ -71,6 +83,7 @@ void diff(float x1, float y1 ,float x2, float y2, float *dx, float *dy);
 void norm(float x, float y ,float *nx, float *ny);
 void dist(float x1, float y1 ,float x2, float y2, float *d);
 void dir(float x1, float y1 ,float x2, float y2, float *dx, float *dy);
+void heading(float x, float y, float *h);
 
 struct enemy *get_enemy_at(float x, float y, 
 													 struct enemy *enemies, int nenemies);
@@ -81,7 +94,8 @@ void init_enemy(struct enemy *enemy);
 
 void update_player(struct player *player, 
 									 struct attacker *attackers, int max_attackers);
-void update_enemies(struct enemy *enemies, int nenemies);
+void update_enemies(struct enemy *enemies, int nenemies,
+										struct player *player);
 void update_enemy(struct enemy *enemy);
 void update_attacker(struct attacker *attacker,
 										 struct player *player, 

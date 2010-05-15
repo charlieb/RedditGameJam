@@ -32,6 +32,29 @@ void dir(float x1, float y1 ,float x2, float y2, float *dx, float *dy)
 	norm(*dx, *dy, dx, dy);
 }
 
+void heading(float x, float y, float *h)
+{
+	if(x < 0 && y < 0)
+		*h = M_PI + atan(x / -y);
+	else if(x < 0 && y == 0) 
+		*h = M_PI / 2;
+	else if(x < 0 && y > 0) 
+		*h = M_PI / 2 + atan(y / x);
+		
+	else if(x == 0 && y < 0) 
+		*h = M_PI;
+	/* Don't change anything in this case */
+	/* else if(x == 0 && y == 0) */
+	else if(x == 0 && y > 0) 
+		*h = 0;
+		
+	else if(x > 0 && y > 0) 
+		*h = atan(x / -y);
+	else if(x > 0 && y == 0) 
+		*h = 3 * M_PI / 2;
+	else if(x > 0 && y < 0) 
+		*h = 3 * M_PI / 2 + atan(y / x);
+}
 
 void print_enemy(struct enemy *enemy)
 {
@@ -110,8 +133,18 @@ void init_enemy(struct enemy *enemy)
 {
 	enemy->x = 0.5 - 1.0 * (float)rand() / (float) RAND_MAX;
 	enemy->y = 0.5 - 1.0 * (float)rand() / (float) RAND_MAX;
-	enemy->size = 0.0125 + 0.0125 * (float)rand() / (float) RAND_MAX;
+	enemy->vx = 0.0;
+	enemy->vy = 0.0;
+	enemy->size = 0.05;//0.0125 + 0.0125 * (float)rand() / (float) RAND_MAX;
 	enemy->health = 2;
+
+	enemy->turn_rate = 0.0001;
+	enemy->attra = 0.20;
+	enemy->align = 0.20;
+	enemy->chase = 0.25;
+	enemy->attract_dist = 0.75;
+	enemy->align_dist = 0.25;
+
 }
 
 void player_attack(struct player *player)
@@ -190,17 +223,88 @@ void update_player(struct player *player,
 		player->far_hit_started = SDL_GetTicks();
 	}
 
+	/* update the player direction (used for drawing) */
+	if(dx != 0.0 || dy != 0.0) {
+		player->dx = dx;
+		player->dy = dy;
+	}
+
 	/* finally update the player position */
 	player->vx = dx * PLAYER_SPEED;
 	player->vy = dy * PLAYER_SPEED;
 	/*print_player(player);*/
 }
 
-void update_enemies(struct enemy *enemies, int nenemies)
+void update_enemies(struct enemy *enemies, int nenemies,
+										struct player *player)
 {
-	int i;
-	for(i = 0; i < nenemies; ++i)
+	int i, j;
+	float x, y, vx, vy;
+	float d, attx, atty, alix, aliy, chsx, chsy, totalx, totaly;
+	
+	for(i = 0; i < nenemies; ++i) {
+		attx = atty = alix = aliy = chsx = chsy = 0.0;
+		for(j = 0; j < nenemies; ++j) {
+			if(i == j) continue;
+			dist(enemies[i].x, enemies[i].y,
+					 enemies[j].x, enemies[j].y, &d);
+			if(d <= enemies[i].attract_dist) {
+				if(d <= enemies[i].align_dist) {
+					if(enemies[j].vx != 0.0 || enemies[j].vy != 0.0)
+						norm(enemies[j].vx, enemies[j].vy, &x, &y);
+					alix += x;
+					aliy += y;
+				}
+				else {
+					norm(enemies[j].x, enemies[j].y, &x, &y);
+					attx += x;
+					atty += y;
+				}
+			}
+		}
+		
+		dist(enemies[i].x, enemies[i].y, player->x, player->y, &d);
+		dir(enemies[i].x, enemies[i].y, player->x, player->y,
+				&chsx, &chsy);
+
+		if(d <= enemies[i].size + player->size) {
+			chsx = -chsx;
+			chsy = -chsy;
+		}
+			
+		
+		if(attx != 0.0 || atty != 0.0)
+			norm(attx, atty, &attx, &atty);
+		if(alix != 0.0 || aliy != 0.0)
+			norm(alix, aliy, &alix, &aliy);
+
+		/*
+		printf("attract: %f, %f\n"
+					 "align: %f, %f\n"
+					 "chase: %f, %f\n",
+					 attx, atty, alix, aliy, chsx, chsy);
+		*/
+
+		vx = 
+			attx * enemies[i].attra + 
+			alix * enemies[i].align + 
+			chsx * enemies[i].chase; 
+		vy = 
+			atty * enemies[i].attra + 
+			aliy * enemies[i].align + 
+			chsy * enemies[i].chase;
+
+		enemies[i].vx += vx * enemies[i].turn_rate;
+		enemies[i].vy += vy * enemies[i].turn_rate;
+		
+		norm(enemies[i].vx, enemies[i].vy, 
+				 &enemies[i].vx, &enemies[i].vy);
+
+		enemies[i].vx *= ENEMY_SPEED;
+		enemies[i].vy *= ENEMY_SPEED;
+
 		update_enemy(&enemies[i]);
+	}
 }
 
 void update_enemy(struct enemy *enemy)
@@ -222,6 +326,8 @@ void update_enemy(struct enemy *enemy)
 			
 	enemy->x += enemy->vx;
 	enemy->y += enemy->vy;
+
+	/*print_enemy(enemy);*/
 }
 
 void update_attacker(struct attacker *attacker,
@@ -229,7 +335,7 @@ void update_attacker(struct attacker *attacker,
 										 struct enemy *enemies, int nenemies)
 {
 	int i;
-	float d, dx, dy, m, dvx, dvy;
+	float d, dx, dy, m;
 
 	if(!attacker->player) {
 		dist(player->x, player->y, attacker->x, attacker->y, &d);
@@ -283,8 +389,8 @@ void update_attacker(struct attacker *attacker,
 		printf("v: %f, %f\ndv: %f, %f\n", 
 					 attacker->vx, attacker->vy,
 					 dx, dy);
-		dx = attacker->vx + dx * attacker->turn_rate;
-		dy = attacker->vy + dy * attacker->turn_rate;
+		dx = attacker->vx + dx * attacker->turn_rate / get_game_speed();
+		dy = attacker->vy + dy * attacker->turn_rate / get_game_speed();
 		
 		printf("new v: %f, %f\n", dx, dy);
 
@@ -300,7 +406,9 @@ void update_attacker(struct attacker *attacker,
 	
 	attacker->x += attacker->vx;
 	attacker->y += attacker->vy;
-	/*attacker->range_remaining -= ATTACKER_SPEED;*/
+
+	mag(dx, dy, &m);
+	attacker->range_remaining -= m;
 }
 
 void update_attackers(struct attacker *attackers, int max_attackers,
@@ -330,7 +438,7 @@ void apply_exclusion(struct player *player,
 		if(d < min_dist / 2) {
 			px = enemies[i].x - min_dist * nx / 2;
 			py = enemies[i].y - min_dist * ny / 2;
-
+	
 			player->x = px;
 			player->y = py;
 		}
