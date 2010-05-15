@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <GL/gl.h>
+#include <GL/glu.h>
 
 #include <SDL.h>
 
@@ -13,10 +14,11 @@
 
 #define CIRCLE_SEGMENTS 50
 
-static GLfloat pos[4] = {5.0, 5.0, 10.0, 0.0};
-static GLfloat red[4] = {0.8, 0.1, 0.0, 1.0};
+static GLfloat pos[4]   = {5.0, 5.0, 10.0, 0.0};
+static GLfloat red[4]   = {0.8, 0.1, 0.0, 1.0};
 static GLfloat green[4] = {0.0, 0.8, 0.2, 1.0};
-static GLfloat blue[4] = {0.2, 0.2, 1.0, 1.0};
+static GLfloat blue[4]  = {0.2, 0.2, 1.0, 1.0};
+static GLfloat grey[4]  = {0.7, 0.7, 0.7, 1.0};
 
 static void circle(int segments, float radius)
 {
@@ -37,11 +39,12 @@ static void circle(int segments, float radius)
 }
 
 void generate_graphics(struct player *player, 
-											 struct enemy *enemies, int nenemies)
+											 struct enemy *enemies, int nenemies,
+											 struct attacker *attackers, int max_attackers)
 {
 	int i;
 
-	player->lines = glGenLists(1 + nenemies);
+	player->lines = glGenLists(1 + nenemies + max_attackers);
 	glNewList(player->lines, GL_COMPILE);
 	circle(CIRCLE_SEGMENTS, player->size);
 	glEndList();		
@@ -52,10 +55,57 @@ void generate_graphics(struct player *player,
 		circle(CIRCLE_SEGMENTS, enemies[i].size);
 		glEndList();
 	}
+
+	for(i = 0; i < max_attackers; ++i) {
+		attackers[i].lines = player->lines + nenemies + i;
+		glNewList(attackers[i].lines, GL_COMPILE);
+		circle(CIRCLE_SEGMENTS, 0.125);
+		glEndList();
+	}
+	
+
+}
+
+static void draw_player(struct player *player)
+{
+	/*print_player(player);*/
+	glPushMatrix();
+	glTranslatef(player->x, player->y, 0.0);
+  glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
+	/* glRotatef(angle, 0.0, 0.0, 1.0); */
+	glCallList(player->lines);
+	glPopMatrix();
+}
+												
+static void draw_enemy(struct enemy *enemy)
+{
+	/*print_enemy(&(enemies[i]));*/
+	glPushMatrix();
+	glTranslatef(enemy->x, enemy->y, 0.0);
+	/* glRotatef(angle, 0.0, 0.0, 1.0); */
+	if(enemy->under_attack)
+		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
+	else
+		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, grey);
+	glCallList(enemy->lines);
+	glPopMatrix();
+}
+
+static void draw_attacker(struct attacker *attacker)
+{
+	/*print_enemy(&(enemies[i]));*/
+	glPushMatrix();
+	glTranslatef(attacker->x, attacker->y, 0.0);
+	glScalef(0.1, 0.1, 0.0);
+	/* glRotatef(angle, 0.0, 0.0, 1.0); */
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
+	glCallList(attacker->lines);
+	glPopMatrix();
 }
 
 static void draw(struct player *player, 
-								 struct enemy *enemies, int nenemies)
+								 struct enemy *enemies, int nenemies,
+								 struct attacker *attackers, int max_attackers)
 {
 	int i;
 	
@@ -70,25 +120,19 @@ static void draw(struct player *player,
   /* glPushMatrix();
 		 glTranslatef(-3.0, -2.0, 0.0);
 	*/
-	
-	/*print_player(player);*/
-	glPushMatrix();
-	glTranslatef(player->x, player->y, 0.0);
-  glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
-	/* glRotatef(angle, 0.0, 0.0, 1.0); */
-	glCallList(player->lines);
-	glPopMatrix();
+
+	draw_player(player);
 
 	for(i = 0; i < nenemies; ++i) {
 		if(enemies[i].health <= 0) continue;		 
-		/*print_enemy(&(enemies[i]));*/
-		glPushMatrix();
-		glTranslatef(enemies[i].x, enemies[i].y, 0.0);
-		/* glRotatef(angle, 0.0, 0.0, 1.0); */
-		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
-		glCallList(enemies[i].lines);
-		glPopMatrix();
+		draw_enemy(&enemies[i]);
 	}
+
+	for(i = 0; i < max_attackers; ++i) {
+		if(!attackers[i].alive) continue;		 
+		draw_attacker(&attackers[i]);
+	}
+
 	/*
 	glPopMatrix();
 	*/
@@ -106,9 +150,11 @@ static void reshape(int width, int height)
   GLfloat h = (GLfloat) height / (GLfloat) width;
 
   glViewport(0, 0, (GLint) width, (GLint) height);
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  glFrustum(-1.0, 1.0, -h, h, 5.0, 60.0);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-1.0, 1.0, -h, h, 5.0, 60.0); 
+	/* glFrustum(-1.0, 1.0, -h, h, 5.0, 60.0); */
+	
 	/* glFrustum(-h, h, -h, h, 5.0, 60.0); */
 	/* glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 60.0); */
   glMatrixMode(GL_MODELVIEW);
@@ -117,7 +163,8 @@ static void reshape(int width, int height)
 }
 
 static void init(struct player *player, 
-								 struct enemy *enemies, int nenemies)
+								 struct enemy *enemies, int nenemies,
+								 struct attacker *attackers, int max_attackers)
 {
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
@@ -126,7 +173,7 @@ static void init(struct player *player,
   glEnable(GL_LIGHT0);
   glEnable(GL_DEPTH_TEST);
 
-	generate_graphics(player, enemies, nenemies);
+	generate_graphics(player, enemies, nenemies, attackers, max_attackers);
 
   glEnable(GL_NORMALIZE);
 
@@ -158,23 +205,48 @@ void calc_game_speed()
 	if (t - start_time >= 1000) {
 		GLfloat seconds = (t - start_time) / 1000.0;
 		GLfloat fps = frames / seconds;
-		printf("%d frames in %g seconds = %g FPS\n", frames, seconds, fps);
 		start_time = t;
 		frames = 0;
 		game_speed = 60.0 / fps;
+		printf("%d frames in %g seconds = %g FPS: speed: %f\n",
+					 frames, seconds, fps, game_speed);
 	}
 }
 
+void get_gl_pos(int x, int y, double *glx, double *gly, double *glz)
+{
+	GLint viewport[4];
+	GLdouble modelview[16];
+	GLdouble projection[16];
+	GLfloat winx, winy, winz;
+
+	glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+	glGetDoublev(GL_PROJECTION_MATRIX, projection);
+	glGetIntegerv(GL_VIEWPORT, viewport);
+
+	winx = (float)x;
+	winy = (float)viewport[3] - (float)y;
+	glReadPixels(x, winz, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winz );
+
+	gluUnProject(winx, winy, winz,
+							 modelview, projection, viewport,
+							 glx, gly, glz);
+
+}
+
+
 void run(struct player *player, 
-				 struct enemy *enemies, int nenemies)
+				 struct enemy *enemies, int nenemies,
+				 struct attacker *attackers, int max_attackers)
 {
   SDL_Surface *screen;
   int done;
   Uint8 *keys;
+	double glx, gly, glz;
 
   SDL_Init(SDL_INIT_VIDEO);
 
-  screen = SDL_SetVideoMode(300, 300, 16, SDL_OPENGL|SDL_RESIZABLE);
+  screen = SDL_SetVideoMode(640, 480, 16, SDL_OPENGL);
   if ( ! screen ) {
     fprintf(stderr, "Couldn't set 300x300 GL video mode: %s\n", SDL_GetError());
     SDL_Quit();
@@ -182,7 +254,7 @@ void run(struct player *player,
   }
   SDL_WM_SetCaption("Title", "title");
 
-  init(player, enemies, nenemies);
+  init(player, enemies, nenemies, attackers, max_attackers);
   reshape(screen->w, screen->h);
   done = 0;
   while ( ! done ) {
@@ -195,11 +267,9 @@ void run(struct player *player,
 																	SDL_OPENGL|SDL_RESIZABLE);
 				if ( screen ) {
 					reshape(screen->w, screen->h);
-				} else {
-					/* Uh oh, we couldn't set the new video mode?? */;
 				}
 				break;
-
+				
 			case SDL_QUIT:
 				done = 1;
 				break;
@@ -214,11 +284,26 @@ void run(struct player *player,
 			case SDL_MOUSEBUTTONDOWN:
 				printf("Mouse button %d pressed at (%d,%d)\n",
 							 event.button.button, event.button.x, event.button.y);
-				player->destx = (- screen->w/2 + event.button.x) / 40.0;
-				player->desty = (screen->h/2 - event.button.y) / 40.0;
-				
-				player->target = get_enemy_at(player->destx, player->desty,
-																			enemies, nenemies);
+				if(1 == event.button.button) {
+					get_gl_pos(event.button.x, event.button.y,
+										 &glx, &gly, &glz);
+					printf("%lf, %lf, %lf\n", glx, gly, glz);
+					player->destx = (float)glx;
+					player->desty = (float)gly;
+
+					player->target = get_enemy_at(player->destx, player->desty,
+																				enemies, nenemies);
+
+				}
+				else if(3 == event.button.button) {
+					player->far_attack = TRUE;
+
+					get_gl_pos(event.button.x, event.button.y,
+										 &glx, &gly, &glz);
+					printf("%lf, %lf, %lf\n", glx, gly, glz);
+					player->far_targetx = (float)glx;
+					player->far_targety = (float)gly;
+				}
 				print_player(player);
 				
 				break;
@@ -233,13 +318,26 @@ void run(struct player *player,
 			done = 1;
 		}
 
+		/*
+		int x, y;
+		SDL_GetMouseState(&x, &y);
+		double glx, gly, glz;
+		get_gl_pos(x, y, &glx, &gly, &glz);
+		printf("%lf, %lf, %lf\n", glx, gly, glz);
+		player->x = (float)glx;
+		player->y = (float)gly;
+		print_player(player);
+		*/
+
 		calc_game_speed();
 		
-		update_player(player);
+		update_player(player, attackers, max_attackers);
 		update_enemies(enemies, nenemies);
+		update_attackers(attackers, max_attackers,
+										 player, enemies, nenemies);
 		apply_exclusion(player, enemies, nenemies);
 
-		draw(player, enemies, nenemies);
+		draw(player, enemies, nenemies, attackers, max_attackers);
 	}
 
 	SDL_Quit();
@@ -248,18 +346,21 @@ void run(struct player *player,
 void test()
 {
 	struct player player;
-	int nenemies = 200, i;
+	int nenemies = 10, i;
 	struct enemy enemies[nenemies];
+	int max_attackers = 2000;
+	struct attacker attackers[max_attackers];
 
 	memset(enemies, 0, nenemies * sizeof(struct enemy));
 	memset(&player, 0, sizeof(struct player));
+	memset(attackers, 0, max_attackers * sizeof(struct attacker));
 
 	init_player(&player);
 	for(i = 0; i < nenemies; ++i) {
 		init_enemy(&enemies[i]);
 		print_enemy(&enemies[i]);
 	}
-	run(&player, enemies, nenemies);
+	run(&player, enemies, nenemies, attackers, max_attackers);
 }
 
 

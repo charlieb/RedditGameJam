@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-std=c99 -pedantic -Wall -Wextra -D_GNU_SOURCE
 INCLUDES=`sdl-config --cflags`
-LIBS=-lm `sdl-config --libs` -lGL -lGLU -lglut
+LIBS=-lm `sdl-config --libs` -lGL -lGLU
 SOURCES=$(wildcard *.c)
 OBJECTS=$(SOURCES:.c=.o)
 DEST=bin
