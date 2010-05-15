@@ -20,6 +20,8 @@ float get_game_speed();
 
 struct attacker {
 	float x, y, vx, vy, destx, desty;
+	float range_remaining;
+	float turn_rate;
 
 	int damage;
 	int alive;

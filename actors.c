@@ -177,6 +177,8 @@ void update_player(struct player *player,
 		attacker->destx = player->far_targetx;
 		attacker->desty = player->far_targety;
 		attacker->damage = 2;
+		attacker->range_remaining = 1.0;
+		attacker->turn_rate = 0.05;
 		/* can't attack yourself */
 		attacker->player = TRUE;
 		/* we initiated the attack so stop */
@@ -254,8 +256,13 @@ void update_attacker(struct attacker *attacker,
 			}
 		}
 
+	/* can we go any further */
+	if(attacker->range_remaining <= 0.0) {
+		attacker->alive = FALSE;
+		return;
+	}		
+
 	/* we haven't hit anything */
-	
 	diff(attacker->x, attacker->y,
 			 attacker->destx, attacker->desty,
 			 &dx, &dy);
@@ -266,10 +273,25 @@ void update_attacker(struct attacker *attacker,
 		return;
 	}
 
+	/* we are far enough away from our dest for at least one more
+		 timestep */
 	if(m > ATTACKER_SPEED) {
 		norm(dx, dy, &dx, &dy);
 		dx *= ATTACKER_SPEED;
 		dy *= ATTACKER_SPEED;
+
+		printf("v: %f, %f\ndv: %f, %f\n", 
+					 attacker->vx, attacker->vy,
+					 dx, dy);
+		dx = attacker->vx + dx * attacker->turn_rate;
+		dy = attacker->vy + dy * attacker->turn_rate;
+		
+		printf("new v: %f, %f\n", dx, dy);
+
+		norm(dx, dy, &dx, &dy);
+		dx *= ATTACKER_SPEED;
+		dy *= ATTACKER_SPEED;
+		
 	}
 	attacker->vx = dx;
 	attacker->vy = dy;
@@ -278,6 +300,7 @@ void update_attacker(struct attacker *attacker,
 	
 	attacker->x += attacker->vx;
 	attacker->y += attacker->vy;
+	/*attacker->range_remaining -= ATTACKER_SPEED;*/
 }
 
 void update_attackers(struct attacker *attackers, int max_attackers,

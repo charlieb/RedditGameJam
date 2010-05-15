@@ -14,12 +14,12 @@
 
 #define CIRCLE_SEGMENTS 50
 
-static GLfloat pos[4]   = {5.0, 5.0, 10.0, 0.0};
+static GLfloat pos[4]   = {0.0, 0.0, 10.0, 0.0};
 static GLfloat red[4]   = {0.8, 0.1, 0.0, 1.0};
 static GLfloat green[4] = {0.0, 0.8, 0.2, 1.0};
 static GLfloat blue[4]  = {0.2, 0.2, 1.0, 1.0};
 static GLfloat grey[4]  = {0.7, 0.7, 0.7, 1.0};
-static GLfloat black[4] = {0.7, 0.7, 0.7, 1.0};
+static GLfloat black[4] = {0.0, 0.0, 0.0, 1.0};
 
 
 static void circle(int segments, float radius)
@@ -50,19 +50,35 @@ void generate_graphics(struct player *player,
 	int i;
 
 	player->lines = glGenLists(1 + nenemies + max_attackers);
+	printf("Player lines: %i\n", player->lines);
 	glNewList(player->lines, GL_COMPILE);
-	circle(CIRCLE_SEGMENTS, player->size);
+  glShadeModel(GL_FLAT);
+	glNormal3f(0.0, 0.0, 1.0);
+	glBegin(GL_LINE_STRIP);
+	glVertex3f(0.0, 0.2, -0.0); /* nose */
+	glVertex3f(0.25, -0.2, -0.5); /* top */
+	glVertex3f(0.25, -0.2, -0.1); /* bottom */
+	glVertex3f(0.2, -0.45, -0.3); /* back */
+	glEnd();
+	glBegin(GL_LINE_STRIP);
+	glVertex3f(0.0, 0.2, -0.0); /* nose */
+	glVertex3f(-0.25, -0.2, -0.5); /* top */
+	glVertex3f(-0.25, -0.2, -0.1); /* bottom */
+	glVertex3f(-0.2, -0.45, -0.3); /* back */
+	glEnd();
 	glEndList();		
 
 	for(i = 0; i < nenemies; ++i) {
-		enemies[i].lines = player->lines + i;
+		enemies[i].lines = player->lines + i + 1;
+		printf("Enemy lines: %i\n", enemies[i].lines);
 		glNewList(enemies[i].lines, GL_COMPILE);
 		circle(CIRCLE_SEGMENTS, enemies[i].size);
 		glEndList();
 	}
 
 	for(i = 0; i < max_attackers; ++i) {
-		attackers[i].lines = player->lines + nenemies + i;
+		attackers[i].lines = player->lines + nenemies + i + 1;
+		printf("Attacker lines: %i\n", attackers[i].lines);
 		glNewList(attackers[i].lines, GL_COMPILE);
 		circle(CIRCLE_SEGMENTS, 0.125);
 		glEndList();
@@ -71,13 +87,40 @@ void generate_graphics(struct player *player,
 
 }
 
+float heading(struct player *player)
+{
+	if(player->vx < 0 && player->vy < 0)
+		return M_PI + atan(player->vx / -player->vy);
+	else if(player->vx < 0 && player->vy == 0) 
+		return M_PI / 2;
+	else if(player->vx < 0 && player->vy > 0) 
+		return M_PI / 2 + atan(player->vy / player->vx);
+		
+	else if(player->vx == 0 && player->vy < 0) 
+		return M_PI;
+	/* Don't change anything in this case */
+	/* else if(player->vx == 0 && player->vy == 0) */
+	else if(player->vx == 0 && player->vy > 0) 
+		return 0;
+		
+	else if(player->vx > 0 && player->vy > 0) 
+		return atan(player->vx / -player->vy);
+	else if(player->vx > 0 && player->vy == 0) 
+		return 3 * M_PI / 2;
+	else if(player->vx > 0 && player->vy < 0) 
+		return 3 * M_PI / 2 + atan(player->vy / player->vx);
+}
+
 static void draw_player(struct player *player)
 {
+	static angle = 0.0;
 	/*print_player(player);*/
 	glPushMatrix();
-	glTranslatef(player->x, player->y, 0.01);
+	glTranslatef(player->x, player->y, -0.02);
   glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
-	/* glRotatef(angle, 0.0, 0.0, 1.0); */
+	
+	glRotatef(heading(player) / (M_PI / 180.0), 0.0, 0.0, 1.0);
+	glScalef(0.1, 0.1, 0.1);
 	glCallList(player->lines);
 	glPopMatrix();
 }
@@ -86,7 +129,7 @@ static void draw_enemy(struct enemy *enemy)
 {
 	/*print_enemy(&(enemies[i]));*/
 	glPushMatrix();
-	glTranslatef(enemy->x, enemy->y, 0.01);
+	glTranslatef(enemy->x, enemy->y, -0.01);
 	/* glRotatef(angle, 0.0, 0.0, 1.0); */
 	if(enemy->under_attack)
 		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
@@ -100,7 +143,7 @@ static void draw_attacker(struct attacker *attacker)
 {
 	/*print_enemy(&(enemies[i]));*/
 	glPushMatrix();
-	glTranslatef(attacker->x, attacker->y, 0.01);
+	glTranslatef(attacker->x, attacker->y, -0.01);
 	glScalef(0.1, 0.1, 0.0);
 	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
 	glCallList(attacker->lines);
@@ -120,7 +163,7 @@ static void draw(struct player *player,
 	glTranslatef(0.0, 0.0, 0.0);
   glShadeModel(GL_FLAT);
 	glNormal3f(0.0, 0.0, -1.0);
-	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, green);
   glBegin(GL_QUADS);
 	{
 		glVertex2f(-1000.0, 1000.0);
@@ -144,7 +187,6 @@ static void draw(struct player *player,
 	}
 
   SDL_GL_SwapBuffers();
-
 }
 
 /* new window size or exposure */
@@ -155,16 +197,13 @@ static void reshape(int width, int height)
   glViewport(0, 0, (GLint) width, (GLint) height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(-1.0, 1.0, -h, h, -60.0, 60.0);
-	/*glFrustum(-1.0, 1.0, -h, h, 5.0, 60.0); */
-	
-	/* glFrustum(-h, h, -h, h, 5.0, 60.0); */
-	/* glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 60.0); */
+	/*glOrtho(-1.0, 1.0, -h, h, -60.0, 60.0);*/
+	glFrustum(-1.0, 1.0, -h, h, -5.0, 60.0); 
+
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
-	/*glTranslatef(0.0, -35.0, -40.0);*/
-	glRotatef(35.264f, 1.0f, 0.0f, 0.0f);
-	/*glRotatef(-45.0f, 0.0f, 1.0f, 0.0f);*/
+	/*glTranslatef(0.0, 0.0, 40.0);*/
+	glRotatef(45.0, 1.0, 0.0, 0.0);
 
 }
 
@@ -172,12 +211,11 @@ static void init(struct player *player,
 								 struct enemy *enemies, int nenemies,
 								 struct attacker *attackers, int max_attackers)
 {
-
-  glLightfv(GL_LIGHT0, GL_POSITION, pos);
+	glLightfv(GL_LIGHT0, GL_POSITION, pos);
   glEnable(GL_CULL_FACE);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
-  glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST);
 
 	generate_graphics(player, enemies, nenemies, attackers, max_attackers);
 
@@ -252,7 +290,7 @@ void run(struct player *player,
 
   SDL_Init(SDL_INIT_VIDEO);
 
-  screen = SDL_SetVideoMode(640, 480, 16, SDL_OPENGL);
+  screen = SDL_SetVideoMode(800, 600, 16, SDL_OPENGL);
   if ( ! screen ) {
     fprintf(stderr, "Couldn't set 300x300 GL video mode: %s\n", SDL_GetError());
     SDL_Quit();
@@ -329,6 +367,7 @@ void run(struct player *player,
 		SDL_GetMouseState(&x, &y);
 		double glx, gly, glz;
 		get_gl_pos(x, y, &glx, &gly, &glz);
+
 		printf("%lf, %lf, %lf\n", glx, gly, glz);
 		player->x = (float)glx;
 		player->y = (float)gly;
