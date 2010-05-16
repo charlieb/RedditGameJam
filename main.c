@@ -15,12 +15,12 @@
 #define CIRCLE_SEGMENTS 50
 
 static GLfloat pos[4]   = {0.0, 0.0, 10.0, 0.0};
-static GLfloat red[4]   = {0.8, 0.1, 0.0, 1.0};
+static GLfloat red[4]   = {1.0, 0.0, 0.0, 1.0};
 static GLfloat green[4] = {0.0, 0.8, 0.2, 1.0};
 static GLfloat blue[4]  = {0.2, 0.2, 1.0, 1.0};
 static GLfloat grey[4]  = {0.7, 0.7, 0.7, 1.0};
 static GLfloat white[4]  = {1.0, 1.0, 1.0, 1.0};
-static GLfloat black[4] = {0.0, 0.0, 0.0, 1.0};
+static GLfloat black[4] = {0.2, 0.2, 0.2, 1.0};
 static GLint ground_plane, ground_grid;
 static GLint gl_player, gl_enemy, gl_missile, gl_laser;
 
@@ -41,8 +41,7 @@ static void circle(int segments, float radius)
 			glVertex3f(radius * cos(angle), radius * sin(angle), j * 0.01);
 		}
 		glEnd();
-	}
-	
+	}	
 }
 
 void generate_graphics(struct player *player, 
@@ -209,7 +208,7 @@ static void draw(struct player *player,
 	
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, green);
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
 	glCallList(ground_plane);
 	
 	/*
@@ -314,26 +313,15 @@ void get_gl_pos(int x, int y, double *glx, double *gly, double *glz)
 }
 
 
-void run(struct player *player, 
+void run(SDL_Surface *screen,
+				 struct player *player, 
 				 struct enemy *enemies, int nenemies,
 				 struct attacker *attackers, int max_attackers)
 {
-  SDL_Surface *screen;
   int done;
   Uint8 *keys;
 	double glx, gly, glz;
 	GLint last_frame_time;
-
-  SDL_Init(SDL_INIT_VIDEO);
-
-  screen = SDL_SetVideoMode(800, 600, 16, SDL_OPENGL);
-  if ( ! screen ) {
-    fprintf(stderr, "Couldn't set 300x300 GL video mode: %s\n", SDL_GetError());
-    SDL_Quit();
-    exit(2);
-  }
-  SDL_WM_SetCaption("Title", "title");
-	SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, TRUE);
 
   init(player, enemies, nenemies, attackers, max_attackers);
   reshape(screen->w, screen->h);
@@ -430,10 +418,10 @@ void run(struct player *player,
 	SDL_Quit();
 }
 
-void test()
+void run_game(SDL_Surface *screen)
 {
 	struct player player;
-	int nenemies = 1, i;
+	int nenemies = 20, i;
 	struct enemy enemies[nenemies];
 	int max_attackers = 2000;
 	struct attacker attackers[max_attackers];
@@ -447,14 +435,79 @@ void test()
 		init_enemy(&enemies[i]);
 		print_enemy(&enemies[i]);
 	}
-	run(&player, enemies, nenemies, attackers, max_attackers);
+	run(screen, &player, enemies, nenemies, attackers, max_attackers);
 }
 
+void init_surface(SDL_Surface **screen)
+{
+  SDL_Init(SDL_INIT_VIDEO);
+	
+  *screen = SDL_SetVideoMode(800, 600, 16, 
+														 SDL_OPENGL|
+														 SDL_HWSURFACE|
+														 SDL_HWACCEL);
+  if ( ! screen ) {
+    fprintf(stderr, "Couldn't set 300x300 GL video mode: %s\n", SDL_GetError());
+    SDL_Quit();
+    exit(2);
+  }
+  SDL_WM_SetCaption("Title", "title");
+	SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, TRUE);
+  reshape((*screen)->w, (*screen)->h);
+}
 
+void title_screen(SDL_Surface *screen)
+{
+  int done;
+  Uint8 *keys;
+	double glx, gly, glz;
+	GLint last_frame_time;
+	
+	SDL_Surface *image = SDL_LoadBMP("title.bmp");
+	 
+  done = 0;
+  while ( ! done ) {
+    SDL_Event event;
+		
+    while ( SDL_PollEvent(&event) ) {
+      switch(event.type) {
+			case SDL_VIDEORESIZE:
+				screen = SDL_SetVideoMode(event.resize.w, event.resize.h, 16,
+																	SDL_OPENGL|
+																	SDL_HWSURFACE|
+																	SDL_HWACCEL);
+				if (screen) reshape(screen->w, screen->h);
+				break;
+				
+			case SDL_QUIT:
+				done = 1;
+				break;
+      case SDL_KEYDOWN:
+				switch (event.key.keysym.sym) {
+				case SDLK_ESCAPE:
+				case SDLK_q:
+					exit(0);
+				case SDLK_n:
+					return;
+				default:
+					break;
+				}
+				break;
+			default:
+				break;
+      }
+		}
+
+		SDL_BlitSurface(image, NULL, screen, NULL);
+		SDL_GL_SwapBuffers();
+	}
+}
 
 int main(int argc, char *argv[])
 {
-	test();
-
+	SDL_Surface *screen = NULL;
+	init_surface(&screen);
+	//title_screen(screen);
+	run_game(screen);
 	return 0;
 }

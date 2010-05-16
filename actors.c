@@ -454,13 +454,8 @@ void update_attacker(struct attacker *attacker,
 			dx *= ATTACKER_SPEED;
 			dy *= ATTACKER_SPEED;
 
-			printf("v: %f, %f\ndv: %f, %f\n", 
-						 attacker->vx, attacker->vy,
-						 dx, dy);
 			dx = attacker->vx + dx * attacker->turn_rate;
 			dy = attacker->vy + dy * attacker->turn_rate;
-		
-			printf("new v: %f, %f\n", dx, dy);
 
 			norm(dx, dy, &dx, &dy);
 			dx *= ATTACKER_SPEED;
