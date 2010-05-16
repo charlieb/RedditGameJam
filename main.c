@@ -433,7 +433,7 @@ void run(struct player *player,
 void test()
 {
 	struct player player;
-	int nenemies = 10, i;
+	int nenemies = 1, i;
 	struct enemy enemies[nenemies];
 	int max_attackers = 2000;
 	struct attacker attackers[max_attackers];

@@ -85,12 +85,14 @@ void print_player(struct player *player)
 	printf("Player:\n"
 				 "\tPos: %f, %f\n"
 				 "\tVel: %f, %f\n"
+				 "\tOld: %f, %f\n"
 				 "\tDest: %f, %f\n"
 				 "\tTarget: %p\n"
 				 "\tSize: %f\n"
 				 "\tHealth: %i\n",
 				 player->x, player->y,
 				 player->vx, player->vy,
+				 player->dx, player->dy,
 				 player->destx, player->desty,
 				 player->target,
 				 player->size, player->health);
@@ -178,6 +180,9 @@ void laser_attack(float x, float y, float vx, float vy,
 	attacker->y = y;
 	attacker->vx = vx;
 	attacker->vy = vy;
+	norm(attacker->vx, attacker->vy, &attacker->vx, &attacker->vy);
+	attacker->vx *= ATTACKER_SPEED;
+	attacker->vy *= ATTACKER_SPEED;
 	attacker->damage = damage;
 	attacker->range_remaining = range;
 	attacker->player = player;
@@ -239,10 +244,11 @@ void update_player(struct player *player,
 		player->target = NULL;
 
 	/* do we have a near range attack to carry out */
-	if(player->target && n <= player->near_attack_range) {
+	if(player->target && n < player->near_attack_range) {
 		dt = SDL_GetTicks() - player->near_attack_started;
 		if(dt > player->near_attack_duration) {
-			laser_attack(player->x, player->y, player->dx, player->dy,
+			laser_attack(player->x, player->y, 
+									 player->dx, player->dy,
 									 player->near_attack_damage, 
 									 player->near_attack_range,
 									 TRUE,
@@ -325,7 +331,7 @@ void update_enemies(struct enemy *enemies, int nenemies,
 		else {
 			enemies[i].near_attack_started = FALSE;
 			for(j = 0; j < nenemies; ++j) {
-				if(i == j) continue;
+				if(i == j || enemies[j].health <= 0) continue;
 				dist(enemies[i].x, enemies[i].y,
 						 enemies[j].x, enemies[j].y, &d);
 				if(d <= enemies[i].attract_dist) {
@@ -424,6 +430,7 @@ void update_attacker(struct attacker *attacker,
 
 	/* can we go any further */
 	if(attacker->range_remaining <= 0.0) {
+		printf("Missed!\n");
 		attacker->alive = FALSE;
 		return;
 	}		
@@ -464,7 +471,7 @@ void update_attacker(struct attacker *attacker,
 		attacker->vy = dy;
 	}
 
-	print_attacker(attacker);
+	/*print_attacker(attacker);*/
 	
 	attacker->x += attacker->vx;
 	attacker->y += attacker->vy;
