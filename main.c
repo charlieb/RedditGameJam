@@ -22,6 +22,7 @@ static GLfloat grey[4]  = {0.7, 0.7, 0.7, 1.0};
 static GLfloat white[4]  = {1.0, 1.0, 1.0, 1.0};
 static GLfloat black[4] = {0.0, 0.0, 0.0, 1.0};
 static GLint ground_plane, ground_grid;
+static GLint gl_player, gl_enemy, gl_missile, gl_laser;
 
 static void circle(int segments, float radius)
 {
@@ -50,8 +51,7 @@ void generate_graphics(struct player *player,
 {
 	int i, j;
 
-	ground_plane = glGenLists(2 + nenemies + max_attackers);
-	ground_grid = ground_plane + 1;
+	ground_plane = glGenLists(6);
 
 	/* draw the ground plane */
 	glNewList(ground_plane, GL_COMPILE);
@@ -67,6 +67,7 @@ void generate_graphics(struct player *player,
   glEnd();
 	glEndList();
 
+	ground_grid = ground_plane + 1;
 	glNewList(ground_grid, GL_COMPILE);
   glShadeModel(GL_FLAT);
 	glNormal3f(0.0, 0.0, -1.0);
@@ -83,9 +84,9 @@ void generate_graphics(struct player *player,
 	glEndList();
 
 
-	player->lines = ground_grid + 1;
+	gl_player = ground_grid + 1;
 	/*printf("Player lines: %i\n", player->lines);*/
-	glNewList(player->lines, GL_COMPILE);
+	glNewList(gl_player, GL_COMPILE);
   glShadeModel(GL_FLAT);
 	glNormal3f(0.0, 0.0, 1.0);
 	glBegin(GL_LINE_STRIP);
@@ -103,34 +104,45 @@ void generate_graphics(struct player *player,
 	circle(50, 0.15);
 	glEndList();		
 
-	for(i = 0; i < nenemies; ++i) {
-		enemies[i].lines = player->lines + i + 1;
-		/*printf("Enemy lines: %i\n", enemies[i].lines);*/
-		glNewList(enemies[i].lines, GL_COMPILE);
-		glBegin(GL_LINE_STRIP);
+	gl_enemy = gl_player + 1;
+	/*printf("Enemy lines: %i\n", enemies[i].lines);*/
+	glNewList(gl_enemy, GL_COMPILE);
+	glBegin(GL_LINE_STRIP);
+	{
 		glVertex3f(0.3, -0.1, -0.2);
 		glVertex3f(-0.1, -0.3, 0.0); 
 		glVertex3f(0.3, -0.1, -0.2);
- 		glVertex3f(0.0, 0.1, -0.2);
+		glVertex3f(0.0, 0.1, -0.2);
 		glVertex3f(-0.3, -0.1, -0.2);
 		glVertex3f(0.1, -0.3, 0.0); 
 		glVertex3f(-0.3, -0.1, -0.2);
-		glEnd();
-		circle(50, 0.15);
-		glEndList();
 	}
+	glEnd();
+	circle(50, 0.15);
+	glEndList();
+	
 
-	for(i = 0; i < max_attackers; ++i) {
-		attackers[i].lines = player->lines + nenemies + i + 1;
-		/*printf("Attacker lines: %i\n", attackers[i].lines);*/
-		glNewList(attackers[i].lines, GL_COMPILE);
-		glBegin(GL_LINE_STRIP);
-		glVertex3f(-0.15, -0.1, -0.2); /* top */
-		glVertex3f(0.0, 0.2, 0.0); /* nose */
-		glVertex3f(0.15, -0.1, -0.2); /* bottom */
-		glEnd();
-		glEndList();
+	gl_missile = gl_enemy + 1;
+	glNewList(gl_missile, GL_COMPILE);
+	glBegin(GL_LINE_STRIP);
+	{
+		glVertex3f(-0.15, -0.1, -0.2); 
+		glVertex3f(0.0, 0.2, 0.0); 
+		glVertex3f(0.15, -0.1, -0.2);
 	}
+	glEnd();
+	glEndList();
+
+	gl_laser = gl_missile + 1;
+	glNewList(gl_laser, GL_COMPILE);
+	glBegin(GL_LINE_STRIP);
+	{
+		glVertex3f(-0.0, -0.05, -0.001); 
+		glVertex3f(0.0, 0.05, -0.001); 
+	}
+	glEnd();
+	glEndList();
+	
 	
 
 }
@@ -141,12 +153,15 @@ static void draw_player(struct player *player)
 	/*print_player(player);*/
 	glPushMatrix();
 	glTranslatef(player->x, player->y, -0.02);
-  glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
+	if(player->hit_by)
+		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
+	else
+		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue);
 	
 	heading(player->dx, player->dy, &h);
 	glRotatef(h / (M_PI / 180.0), 0.0, 0.0, 1.0);
 	glScalef(0.1, 0.1, 0.1);
-	glCallList(player->lines);
+	glCallList(gl_player);
 	glPopMatrix();
 }
 												
@@ -158,7 +173,7 @@ static void draw_enemy(struct enemy *enemy)
 	glPushMatrix();
 	glTranslatef(enemy->x, enemy->y, -0.01);
 	/* glRotatef(angle, 0.0, 0.0, 1.0); */
-	if(enemy->under_attack)
+	if(enemy->hit_by)
 		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
 	else
 		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, grey);
@@ -167,7 +182,7 @@ static void draw_enemy(struct enemy *enemy)
 	glRotatef(h / (M_PI / 180.0), 0.0, 0.0, 1.0);
 	glScalef(0.1, 0.1, 0.1);
 
-	glCallList(enemy->lines);
+	glCallList(gl_enemy);
 	glPopMatrix();
 }
 
@@ -182,7 +197,7 @@ static void draw_attacker(struct attacker *attacker)
 
 	heading(attacker->vx, attacker->vy, &h);
 	glRotatef(h / (M_PI / 180.0), 0.0, 0.0, 1.0);
-	glCallList(attacker->lines);
+	glCallList(attacker->type == laser ? gl_laser : gl_missile);
 	glPopMatrix();
 }
 
@@ -259,13 +274,6 @@ static void init(struct player *player,
 	*/
 }
 
-
-static float game_speed = 1.0;
-float get_game_speed()
-{
-	return game_speed;
-}
-
 void calc_game_speed()
 {
 	static int frames = 0;
@@ -277,9 +285,8 @@ void calc_game_speed()
 	if (t - start_time >= 1000) {
 		GLfloat seconds = (t - start_time) / 1000.0;
 		GLfloat fps = frames / seconds;
-		game_speed = 60.0 / fps;
-		printf("%d frames in %g seconds = %g FPS: speed: %f\n",
-					 frames, seconds, fps, game_speed);	
+		printf("%d frames in %g seconds = %g FPS\n",
+					 frames, seconds, fps);	
 		start_time = t;
 		frames = 0;
 	}
@@ -315,6 +322,7 @@ void run(struct player *player,
   int done;
   Uint8 *keys;
 	double glx, gly, glz;
+	GLint last_frame_time;
 
   SDL_Init(SDL_INIT_VIDEO);
 
@@ -325,6 +333,7 @@ void run(struct player *player,
     exit(2);
   }
   SDL_WM_SetCaption("Title", "title");
+	SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, TRUE);
 
   init(player, enemies, nenemies, attackers, max_attackers);
   reshape(screen->w, screen->h);
@@ -405,12 +414,17 @@ void run(struct player *player,
 		calc_game_speed();
 		
 		update_player(player, attackers, max_attackers);
-		update_enemies(enemies, nenemies, player);
+		update_enemies(enemies, nenemies, player,
+									 attackers, max_attackers);
 		update_attackers(attackers, max_attackers,
 										 player, enemies, nenemies);
 		apply_exclusion(player, enemies, nenemies);
 
 		draw(player, enemies, nenemies, attackers, max_attackers);
+
+		/* frame limiter */
+		while(SDL_GetTicks() - last_frame_time <  1000 / 60);
+		last_frame_time = SDL_GetTicks();
 	}
 
 	SDL_Quit();

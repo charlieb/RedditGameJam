@@ -11,14 +11,15 @@
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 
 float get_game_speed();
-#define PLAYER_SPEED (0.00125 / get_game_speed())
-#define ATTACKER_SPEED (0.0125 / get_game_speed())
-#define ENEMY_SPEED (0.00025 / get_game_speed())
+#define PLAYER_SPEED 0.0125
+#define ATTACKER_SPEED 0.03125
+#define ENEMY_SPEED 0.0025 
 #define MIN_DIST 0.000001
 #define TRUE 1
 #define FALSE 0
 #define ATTACK_DISPLAY_DURATION 100
 
+enum attacker_types { missile, laser };
 struct attacker {
 	float x, y, vx, vy, destx, desty;
 	float range_remaining;
@@ -28,7 +29,7 @@ struct attacker {
 	int alive;
 	int player;
 
-	GLint lines;
+	enum attacker_types type;
 };
 
 struct enemy {
@@ -44,12 +45,18 @@ struct enemy {
 
 	float attract_dist;
 	float align_dist;
+	
+	/* outgoing attacks */
+	float near_attack_range;
+	Uint32 near_attack_duration;
+	Uint32 near_attack_started;
+	Uint32 near_attack_damage;
 
+
+	/* incoming attacks */
 	int under_attack;
-	struct attacker *far_hit_by;
-	Uint32 far_hit_started;
-
-	GLint lines;
+	struct attacker *hit_by;
+	Uint32 hit_started;
 };
 
 struct player {
@@ -58,22 +65,25 @@ struct player {
 	float size;
 	int health;
 
+	/* outgoing attacks */
 	int far_attack;
+	float far_attack_range;
 	Uint32 far_attack_started;
 	float far_targetx, far_targety;
+	Uint32 far_attack_duration;
+	int far_attack_damage;
 
-	struct attacker *far_hit_by;
-	Uint32 far_hit_started;
-	
-	float close_attack_range;
-	Uint32 attack_duration;
-
+	float near_attack_range;
+	Uint32 near_attack_duration;
 	struct enemy *target;
-	Uint32 attack_started;
+	Uint32 near_attack_started;
+	int near_attack_damage;
+
+	/* incoming attacks */
+	struct attacker *hit_by;
+	Uint32 hit_started;
 	
 	unsigned int score;
-
-	GLint lines;
 };
 
 
@@ -95,7 +105,8 @@ void init_enemy(struct enemy *enemy);
 void update_player(struct player *player, 
 									 struct attacker *attackers, int max_attackers);
 void update_enemies(struct enemy *enemies, int nenemies,
-										struct player *player);
+										struct player *player,
+										struct attacker *attackers, int max_attackers);
 void update_enemy(struct enemy *enemy);
 void update_attacker(struct attacker *attacker,
 										 struct player *player, 

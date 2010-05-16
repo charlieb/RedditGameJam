@@ -110,6 +110,16 @@ struct enemy *get_enemy_at(float x, float y,
 	return NULL;
 }
 
+int count_active_attackers(struct attacker *attackers, 
+													 int max_attackers)
+{
+	int i, c = 0;
+	for(i = 0; i < max_attackers; ++i) 
+		if(attackers[i].alive)	
+			c++;
+	return c;
+}
+
 struct attacker *find_unused_attacker(struct attacker *attackers, 
 																			int max_attackers)
 {
@@ -125,8 +135,12 @@ void init_player(struct player *player)
 	player->size = 0.05;
 	player->destx = player->desty = 0.0;
 	player->health = 20;
-	player->close_attack_range = 0.00001;
-	player->attack_duration = 100; /* 1/10 secs */
+	player->near_attack_range = 0.1;
+	player->far_attack_range = 1.0;
+	player->far_attack_duration = 500; /* 1/10 secs */
+	player->near_attack_duration = 333; /* 1/10 secs */
+	player->far_attack_damage = 1;
+	player->near_attack_damage = 2;
 }
 
 void init_enemy(struct enemy *enemy)
@@ -138,19 +152,59 @@ void init_enemy(struct enemy *enemy)
 	enemy->size = 0.05;//0.0125 + 0.0125 * (float)rand() / (float) RAND_MAX;
 	enemy->health = 2;
 
-	enemy->turn_rate = 0.0001;
+	enemy->turn_rate = 0.01;
 	enemy->attra = 0.20;
 	enemy->align = 0.20;
 	enemy->chase = 0.25;
 	enemy->attract_dist = 0.75;
 	enemy->align_dist = 0.25;
 
+	enemy->near_attack_range = 0.1;
+	enemy->near_attack_duration = 333;
+	enemy->near_attack_started = FALSE;
+	enemy->near_attack_damage = 1;
+
 }
 
-void player_attack(struct player *player)
+void laser_attack(float x, float y, float vx, float vy, 
+									int damage, float range, int player,
+									struct attacker *attackers, int max_attackers)
 {
-	player->target->health -= 1;
-	print_enemy(player->target);
+	struct attacker *attacker = find_unused_attacker(attackers, max_attackers);
+
+	attacker->type = laser;
+	attacker->alive = TRUE;
+	attacker->x = x;
+	attacker->y = y;
+	attacker->vx = vx;
+	attacker->vy = vy;
+	attacker->damage = damage;
+	attacker->range_remaining = range;
+	attacker->player = player;
+}
+
+
+void missile_attack(float x, float y, 
+										float vx, float vy, 
+										float destx, float desty,
+										int damage, float range, float turn_rate, 
+										int player,
+										struct attacker *attackers, int max_attackers)
+{
+	struct attacker *attacker = find_unused_attacker(attackers, max_attackers);
+
+	attacker->type = missile;
+	attacker->alive = TRUE;
+	attacker->x = x;
+	attacker->y = y;
+	attacker->vx = vx;
+	attacker->vy = vy;
+	attacker->destx = destx;
+	attacker->desty = desty;
+	attacker->damage = damage;
+	attacker->turn_rate = turn_rate;
+	attacker->range_remaining = range;
+	attacker->player = player;
 }
 
 void update_player(struct player *player,
@@ -158,6 +212,7 @@ void update_player(struct player *player,
 {
 	float dx, dy, n;
 	struct attacker *attacker = NULL;
+	Uint32 dt;
 
 	player->x += player->vx;
 	player->y += player->vy;
@@ -179,48 +234,49 @@ void update_player(struct player *player,
 	else 
 		dx = dy = 0.0;
 
-	if(player->target && player->target->health > 0)
-		printf("Target Range: %f\n", n);
+	/* don't chase the deaders */
+	if(player->target && player->target->health <= 0)
+		player->target = NULL;
 
-	/* do we have a close range attack to carry out */
-	if(player->target && 
-		 player->target->health > 0 &&
-		 n <= player->close_attack_range + player->size + player->target->size) {
-		if(!player->attack_started) {
-			player->attack_started = SDL_GetTicks();
-			player->target->under_attack = TRUE;
-		}
-		else if(SDL_GetTicks() > player->attack_started + player->attack_duration) {
-			player_attack(player);
-			player->attack_started = FALSE;
-			player->target->under_attack = FALSE;
+	/* do we have a near range attack to carry out */
+	if(player->target && n <= player->near_attack_range) {
+		dt = SDL_GetTicks() - player->near_attack_started;
+		if(dt > player->near_attack_duration) {
+			laser_attack(player->x, player->y, player->dx, player->dy,
+									 player->near_attack_damage, 
+									 player->near_attack_range,
+									 TRUE,
+									 attackers, max_attackers);
+			player->near_attack_started = SDL_GetTicks();
 			player->target = NULL;
 		}
 	}
 	
 	/* do we have a long range attack to launch */
 	if(player->far_attack) {
-		attacker = find_unused_attacker(attackers, max_attackers);
-		
-		attacker->alive = TRUE;
-		attacker->x = player->x;
-		attacker->y = player->y;
-		attacker->vx = player->vx;
-		attacker->vy = player->vy;
-		attacker->destx = player->far_targetx;
-		attacker->desty = player->far_targety;
-		attacker->damage = 2;
-		attacker->range_remaining = 1.0;
-		attacker->turn_rate = 0.05;
-		/* can't attack yourself */
-		attacker->player = TRUE;
-		/* we initiated the attack so stop */
-		player->far_attack = FALSE;
+		dt = SDL_GetTicks() - player->far_attack_started;
+		if(dt > player->far_attack_duration) {
+			missile_attack(player->x, player->y, 
+										 player->dx, player->dy,
+										 player->far_targetx, player->far_targety,
+										 player->far_attack_damage, 
+										 player->far_attack_range,
+										 0.75,
+										 TRUE,
+										 attackers, max_attackers);
+			/* fire and forget */
+			player->far_attack = FALSE;
+			player->far_attack_started = SDL_GetTicks();
+		}
 	}
 
 	/* have we been hit */
-	if(player->far_hit_by) {
-		player->far_hit_started = SDL_GetTicks();
+	if(player->hit_by) {
+		if(SDL_GetTicks() > player->hit_started + ATTACK_DISPLAY_DURATION) {
+			player->health -= player->hit_by->damage;
+			player->hit_by = NULL;
+			player->hit_started = FALSE;
+		}
 	}
 
 	/* update the player direction (used for drawing) */
@@ -236,53 +292,67 @@ void update_player(struct player *player,
 }
 
 void update_enemies(struct enemy *enemies, int nenemies,
-										struct player *player)
+										struct player *player,
+										struct attacker *attackers, int max_attackers)
 {
-	int i, j;
+	int i, j, try_attack = TRUE;
 	float x, y, vx, vy;
-	float d, attx, atty, alix, aliy, chsx, chsy, totalx, totaly;
+	float d, dt, attx, atty, alix, aliy, chsx, chsy, totalx, totaly;
 	
 	for(i = 0; i < nenemies; ++i) {
+		if(enemies[i].health <= 0) continue;
+
 		attx = atty = alix = aliy = chsx = chsy = 0.0;
-		for(j = 0; j < nenemies; ++j) {
-			if(i == j) continue;
-			dist(enemies[i].x, enemies[i].y,
-					 enemies[j].x, enemies[j].y, &d);
-			if(d <= enemies[i].attract_dist) {
-				if(d <= enemies[i].align_dist) {
-					if(enemies[j].vx != 0.0 || enemies[j].vy != 0.0)
-						norm(enemies[j].vx, enemies[j].vy, &x, &y);
-					alix += x;
-					aliy += y;
-				}
-				else {
-					norm(enemies[j].x, enemies[j].y, &x, &y);
-					attx += x;
-					atty += y;
-				}
-			}
-		}
-		
 		dist(enemies[i].x, enemies[i].y, player->x, player->y, &d);
 		dir(enemies[i].x, enemies[i].y, player->x, player->y,
 				&chsx, &chsy);
 
-		if(d <= enemies[i].size + player->size) {
-			chsx = -chsx;
-			chsy = -chsy;
+		/* if we are close to the player we do not flock */
+		if(d < enemies[i].near_attack_range) {
+			dt = SDL_GetTicks() - enemies[i].near_attack_started;
+			if(!enemies[i].near_attack_started)
+				enemies[i].near_attack_started = SDL_GetTicks();
+			else if(dt > player->near_attack_duration) {
+				laser_attack(enemies[i].x, enemies[i].y,
+										 enemies[i].vx, enemies[i].vy,
+										 enemies[i].near_attack_damage,
+										 enemies[i].near_attack_range,
+										 FALSE,
+										 attackers, max_attackers);
+				enemies[i].near_attack_started = FALSE;
+			}
 		}
-			
+		else {
+			enemies[i].near_attack_started = FALSE;
+			for(j = 0; j < nenemies; ++j) {
+				if(i == j) continue;
+				dist(enemies[i].x, enemies[i].y,
+						 enemies[j].x, enemies[j].y, &d);
+				if(d <= enemies[i].attract_dist) {
+					if(d <= enemies[i].align_dist) {
+						if(enemies[j].vx != 0.0 || enemies[j].vy != 0.0)
+							norm(enemies[j].vx, enemies[j].vy, &x, &y);
+						alix += x;
+						aliy += y;
+					}
+					else {
+						norm(enemies[j].x, enemies[j].y, &x, &y);
+						attx += x;
+						atty += y;
+					}
+				}
+			}
 		
-		if(attx != 0.0 || atty != 0.0)
-			norm(attx, atty, &attx, &atty);
-		if(alix != 0.0 || aliy != 0.0)
-			norm(alix, aliy, &alix, &aliy);
-
+			if(attx != 0.0 || atty != 0.0)
+				norm(attx, atty, &attx, &atty);
+			if(alix != 0.0 || aliy != 0.0)
+				norm(alix, aliy, &alix, &aliy);
+		}
 		/*
-		printf("attract: %f, %f\n"
-					 "align: %f, %f\n"
-					 "chase: %f, %f\n",
-					 attx, atty, alix, aliy, chsx, chsy);
+			printf("attract: %f, %f\n"
+			"align: %f, %f\n"
+			"chase: %f, %f\n",
+			attx, atty, alix, aliy, chsx, chsy);
 		*/
 
 		vx = 
@@ -296,7 +366,7 @@ void update_enemies(struct enemy *enemies, int nenemies,
 
 		enemies[i].vx += vx * enemies[i].turn_rate;
 		enemies[i].vy += vy * enemies[i].turn_rate;
-		
+	
 		norm(enemies[i].vx, enemies[i].vy, 
 				 &enemies[i].vx, &enemies[i].vy);
 
@@ -309,21 +379,13 @@ void update_enemies(struct enemy *enemies, int nenemies,
 
 void update_enemy(struct enemy *enemy)
 {
-	if(enemy->health <= 0) return;
-	
-	if(enemy->under_attack && enemy->far_hit_by) {
-		printf("%i vs %i\n", 
-					 SDL_GetTicks(),
-					 enemy->far_hit_started + ATTACK_DISPLAY_DURATION);
-		
-		if(SDL_GetTicks() > enemy->far_hit_started + ATTACK_DISPLAY_DURATION) {
-			enemy->under_attack = FALSE;
-			enemy->health -= enemy->far_hit_by->damage;
-			enemy->far_hit_by->alive = FALSE;
-			enemy->far_hit_by = NULL;
+	if(enemy->hit_by)
+		if(SDL_GetTicks() > enemy->hit_started + ATTACK_DISPLAY_DURATION) {
+			enemy->health -= enemy->hit_by->damage;
+			enemy->hit_by = NULL;
+			enemy->hit_started = FALSE;
 		}
-	}
-			
+	
 	enemy->x += enemy->vx;
 	enemy->y += enemy->vy;
 
@@ -340,10 +402,10 @@ void update_attacker(struct attacker *attacker,
 	if(!attacker->player) {
 		dist(player->x, player->y, attacker->x, attacker->y, &d);
 		if(d <= player->size) {
-			player->far_hit_by = attacker;
-			player->far_hit_started = SDL_GetTicks();
-			printf("Reached player\n");
 			attacker->alive = FALSE;
+			player->hit_by = attacker;
+			player->hit_started = SDL_GetTicks();
+			printf("Reached player\n");
 			return;
 		}
 	}
@@ -352,12 +414,10 @@ void update_attacker(struct attacker *attacker,
 			if(enemies[i].health <= 0) continue;
 			dist(enemies[i].x, enemies[i].y, attacker->x, attacker->y, &d);
 			if(d <= enemies[i].size) {
-				enemies[i].far_hit_by = attacker;
-				enemies[i].far_hit_started = SDL_GetTicks();
-				enemies[i].under_attack = TRUE;
-				printf("Reached enemy\n");
-				print_enemy(&enemies[i]);
 				attacker->alive = FALSE;
+				enemies[i].hit_by = attacker;
+				enemies[i].hit_started = SDL_GetTicks();
+				printf("Reached enemy\n");
 				return;
 			}
 		}
@@ -369,39 +429,41 @@ void update_attacker(struct attacker *attacker,
 	}		
 
 	/* we haven't hit anything */
-	diff(attacker->x, attacker->y,
-			 attacker->destx, attacker->desty,
-			 &dx, &dy);
-	mag(dx, dy, &m);
-	if(m <= MIN_DIST) {
-		printf("Reached destimation\n");
-		attacker->alive = FALSE;
-		return;
+ 	if(attacker->type != laser) { /* we are a missile -> we can turn */
+		diff(attacker->x, attacker->y,
+				 attacker->destx, attacker->desty,
+				 &dx, &dy);
+		mag(dx, dy, &m);
+		if(m <= MIN_DIST) {
+			printf("Reached destimation\n");
+			attacker->alive = FALSE;
+			return;
+		}
+
+		/* we are far enough away from our dest for at least one more
+			 timestep */
+		if(m > ATTACKER_SPEED) {
+			norm(dx, dy, &dx, &dy);
+			dx *= ATTACKER_SPEED;
+			dy *= ATTACKER_SPEED;
+
+			printf("v: %f, %f\ndv: %f, %f\n", 
+						 attacker->vx, attacker->vy,
+						 dx, dy);
+			dx = attacker->vx + dx * attacker->turn_rate;
+			dy = attacker->vy + dy * attacker->turn_rate;
+		
+			printf("new v: %f, %f\n", dx, dy);
+
+			norm(dx, dy, &dx, &dy);
+			dx *= ATTACKER_SPEED;
+			dy *= ATTACKER_SPEED;
+		
+		}
+		attacker->vx = dx;
+		attacker->vy = dy;
 	}
 
-	/* we are far enough away from our dest for at least one more
-		 timestep */
-	if(m > ATTACKER_SPEED) {
-		norm(dx, dy, &dx, &dy);
-		dx *= ATTACKER_SPEED;
-		dy *= ATTACKER_SPEED;
-
-		printf("v: %f, %f\ndv: %f, %f\n", 
-					 attacker->vx, attacker->vy,
-					 dx, dy);
-		dx = attacker->vx + dx * attacker->turn_rate / get_game_speed();
-		dy = attacker->vy + dy * attacker->turn_rate / get_game_speed();
-		
-		printf("new v: %f, %f\n", dx, dy);
-
-		norm(dx, dy, &dx, &dy);
-		dx *= ATTACKER_SPEED;
-		dy *= ATTACKER_SPEED;
-		
-	}
-	attacker->vx = dx;
-	attacker->vy = dy;
-	
 	print_attacker(attacker);
 	
 	attacker->x += attacker->vx;
@@ -416,6 +478,7 @@ void update_attackers(struct attacker *attackers, int max_attackers,
 											struct enemy *enemies, int nenemies)
 {
 	int i;
+
 	for(i = 0; i < max_attackers; ++i)
 		if(attackers[i].alive)
 			update_attacker(&attackers[i], player, enemies, nenemies);
