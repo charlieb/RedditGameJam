@@ -48,7 +48,7 @@ void generate_graphics(struct player *player,
 											 struct enemy *enemies, int nenemies,
 											 struct attacker *attackers, int max_attackers)
 {
-	int i, j;
+	int i;
 
 	ground_plane = glGenLists(6);
 
@@ -71,13 +71,12 @@ void generate_graphics(struct player *player,
   glShadeModel(GL_FLAT);
 	glNormal3f(0.0, 0.0, -1.0);
 	glBegin(GL_LINES);
-	for(i = 0; i < 50; ++i)
-		for(j = 0; j < 50; ++j) {
-			glVertex3f(0.25 - 0.01 * i,  0.01 * j, -0.0001);
-			glVertex3f(0.25 - 0.01 * i, -0.01 * j, -0.0001);
+	for(i = 0; i < 50; ++i) {
+		glVertex3f(0.5 - 0.02 * i, -1.0, 0.0);
+		glVertex3f(0.5 - 0.02 * i,  1.0, 0.0);
 
-			glVertex3f(-0.01 * i, 0.25 - 0.01 * j, -0.0001);
-			glVertex3f( 0.01 * i, 0.25 - 0.01 * j, -0.0001);
+		glVertex3f(-1.0, 0.5 - 0.02 * i, 0.0);
+		glVertex3f( 1.0, 0.5 - 0.02 * i, 0.0);
 	}
 	glEnd();
 	glEndList();
@@ -125,9 +124,9 @@ void generate_graphics(struct player *player,
 	glNewList(gl_missile, GL_COMPILE);
 	glBegin(GL_LINE_STRIP);
 	{
-		glVertex3f(-0.15, -0.1, -0.2); 
-		glVertex3f(0.0, 0.2, 0.0); 
-		glVertex3f(0.15, -0.1, -0.2);
+		glVertex3f(-0.15, -0.1, -0.02); 
+		glVertex3f(0.0, 0.2, -0.02); 
+		glVertex3f(0.15, -0.1, -0.02);
 	}
 	glEnd();
 	glEndList();
@@ -191,7 +190,7 @@ static void draw_attacker(struct attacker *attacker)
 	/*print_enemy(&(enemies[i]));*/
 	glPushMatrix();
 	glTranslatef(attacker->x, attacker->y, -0.01);
-	glScalef(0.1, 0.1, 0.0);
+	glScalef(0.1, 0.1, 1.0);
 	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, red);
 
 	heading(attacker->vx, attacker->vy, &h);
@@ -208,14 +207,26 @@ static void draw(struct player *player,
 	
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, grey);
 	glCallList(ground_plane);
 	
-	/*
 	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, white);
-	glCallList(ground_grid);
-	*/
+	glPushMatrix();
+	glLoadIdentity();
+	glTranslatef(0.0, 0.0, -0.0001);
+	glShadeModel(GL_FLAT);
+	glNormal3f(0.0, 0.0, -1.0);
+	glBegin(GL_LINES);
+	for(i = 0; i < 50; ++i) {
+		glVertex2f(0.5 - 0.02 * i, -1.0);
+		glVertex2f(0.5 - 0.02 * i,  1.0);
 
+		glVertex2f(-1.0, 0.5 - 0.02 * i);
+		glVertex2f( 1.0, 0.5 - 0.02 * i);
+	}
+	glEnd();
+	glPopMatrix();
+	
 	draw_player(player);
 
 	for(i = 0; i < nenemies; ++i) {
@@ -241,11 +252,12 @@ static void reshape(int width, int height)
 	glLoadIdentity();
 	/*glOrtho(-1.0, 1.0, -h, h, -60.0, 60.0);*/
 	glFrustum(-1.0, 1.0, -h, h, -5.0, 60.0); 
+	glRotatef(45.0, 1.0, 0.0, 0.0);
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 	/*glTranslatef(0.0, 0.0, 40.0);*/
-	glRotatef(55.0, 1.0, 0.0, 0.0);
+
 
 }
 
